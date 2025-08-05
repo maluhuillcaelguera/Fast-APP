@@ -3,3 +3,4 @@ uvicorn[standard]
 pillow
 tensorflow==2.13.0
 python-multipart
+pydantic
