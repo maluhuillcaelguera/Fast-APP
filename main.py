@@ -1,4 +1,3 @@
-
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
@@ -9,6 +8,7 @@ from PIL import Image, UnidentifiedImageError
 import numpy as np
 import io
 import logging
+import uvicorn
 
 app = FastAPI()
 logger = logging.getLogger("uvicorn.error")
@@ -43,9 +43,11 @@ def preprocess_image(file_bytes: bytes):
 async def predict(file: UploadFile = File(...)):
     if not file.content_type.startswith("image/"):
         raise HTTPException(status_code=400, detail="El archivo debe ser una imagen.")
+
     contents = await file.read()
     if len(contents) == 0:
         raise HTTPException(status_code=400, detail="Archivo vacío.")
+
     try:
         img_tensor = preprocess_image(contents)
     except UnidentifiedImageError:
@@ -53,18 +55,18 @@ async def predict(file: UploadFile = File(...)):
     except Exception as e:
         logger.exception("Error en preprocess_image")
         raise HTTPException(status_code=500, detail=f"Error al procesar imagen: {e}")
+
     try:
         preds = model.predict(img_tensor)
         probs = preds.flatten()
         top_indices = probs.argsort()[::-1][:3]
-        top_k = []
-        for idx in top_indices:
-            top_k.append({
-                "class": class_names[idx],
-                "confidence": round(float(probs[idx]), 4)
-            })
+        top_k = [
+            {"class": class_names[idx], "confidence": round(float(probs[idx]), 4)}
+            for idx in top_indices
+        ]
         predicted_class = class_names[int(np.argmax(probs))]
         confidence = float(np.max(probs))
+
         return PredictionResponse(
             predicted_class=predicted_class,
             confidence=round(confidence, 4),
@@ -73,3 +75,6 @@ async def predict(file: UploadFile = File(...)):
     except Exception as e:
         logger.exception("Error en predicción")
         raise HTTPException(status_code=500, detail=f"Error durante la inferencia: {e}")
+
+
+
